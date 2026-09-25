@@ -1,0 +1,19 @@
+node_modules
+*.log
+npm-debug.log*
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Local database and test photos
+data/
+artifacts/
+
+# Editors
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.sw?
