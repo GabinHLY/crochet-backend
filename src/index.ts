@@ -7,6 +7,7 @@ import { imageSize } from './imageSize'
 import { openDatabase } from './database'
 import { patternRoutes } from './patternRoutes'
 import { z } from 'zod'
+import { accessProtection, createAccessToken, passwordMatches } from './auth'
 
 const app = express()
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 12 * 1024 * 1024, files: 4 } })
@@ -20,12 +21,24 @@ app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', origin)
     res.setHeader('Vary', 'Origin')
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
   }
   if (req.method === 'OPTIONS') { res.status(204).end(); return }
   next()
 })
 app.use(express.json({ limit: '24mb' }))
+const sitePassword = process.env.SITE_PASSWORD
+app.get('/api/auth/status', (_req, res) => res.json({ configured: Boolean(sitePassword) }))
+app.post('/api/auth/login', (req, res) => {
+  if (!sitePassword) { res.status(503).json({ error: 'Le mot de passe du site n’est pas encore configuré.' }); return }
+  const parsed = z.object({ password: z.string().min(1).max(200) }).safeParse(req.body)
+  if (!parsed.success || !passwordMatches(parsed.data.password, sitePassword)) {
+    res.status(401).json({ error: 'Ce mot de passe n’est pas le bon.' })
+    return
+  }
+  res.json({ token: createAccessToken(sitePassword) })
+})
+app.use('/api', accessProtection(sitePassword))
 const database = openDatabase()
 app.use('/api/patterns', patternRoutes(database))
 app.get('/api/status', (_req, res) => res.json({ storage: 'sqlite', photoAnalysisAvailable: Boolean(process.env.GEMINI_API_KEY), provider: 'gemini' }))
